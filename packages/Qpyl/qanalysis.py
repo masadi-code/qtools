@@ -151,7 +151,9 @@ class QAnalyseFeps(object):
             if self._lra_lambdas != None:
                 try:
                     lra = qfo.part0.calc_lra(self._lra_lambdas[0],
-                                             self._lra_lambdas[1])
+                                             self._lra_lambdas[1],
+                                             state_a=self._lra_state_a,
+                                             state_b=self._lra_state_b)
                 except Exception as e:
                     logger.warning("LRA failed on '{}': {}"
                                    "".format(qfo_path, e))
@@ -357,7 +359,7 @@ dG_lambda   {dg_fep[0]:10.2f} {dg_fep[1]:10.2f} {dg_fep[2]:10.2f} \
             # Part 0 energies
             # Multistate mode plots all energies as a function of the chosen state
             if self._multistate > 0:
-                lambda_column = qfo.part0.data_state[self._multistate].get_columns()[3]
+                lambda_column = qfo.part0.data_state[self._multistate - 1].get_columns()[3]
             else:
                 lambda_column = None
             for evb_state in range(evb_states):
