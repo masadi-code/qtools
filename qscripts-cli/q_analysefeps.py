@@ -66,6 +66,9 @@ every mapping.
                              "REORG are calculated. Default is '{}'."
                              "".format(str(def_lra_l)))
 
+    optarg.add_argument("--multistate", action='store_true')
+    optarg.add_argument("--lra-state-a", type=int, default=None)
+    optarg.add_argument("--lra-state-b", type=int, default=None)
 
     optarg.add_argument("--qfep_out", dest="qfep_out",
                         help="Qfep output filename (default='{}')"
@@ -123,7 +126,8 @@ every mapping.
 
     # analyse the outputs
     qos = [os.path.join(md, args.qfep_out) for md in sorted(args.fepdirs)]
-    qaf = QAnalyseFeps(qos, lra_lambdas=lra_l)
+    qaf = QAnalyseFeps(qos, lra_lambdas=lra_l, multistate=args.multistate,
+                       lra_state_a=args.lra_state_a, lra_state_b=args.lra_state_b)
 
     stats, fails = [], []
 

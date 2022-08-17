@@ -165,7 +165,7 @@ class _QFepPart0(object):
             if not e_dc.get_rows():
                 raise QFepOutputError("Part0 is empty (no rows).")
 
-    def calc_lra(self, lambda_a, lambda_b):
+    def calc_lra(self, lambda_a, lambda_b, state_a=None, state_b=None):
         """Calculate LRA and reorganization energies between two states.
 
         LRA = 0.5*(<E2-E1>_10+<E2-E1>_01)
@@ -189,7 +189,17 @@ class _QFepPart0(object):
         """
 
         if self._num_evb_states != 2:
-            raise QFepOutputError("LRA works only with two states")
+            if state_a is None or state_b is None:
+                raise QFepOutputError("Must specify state_a and state_b for LRA with more than two states")
+
+        if state_a is None:
+            state_a = 0
+        else:
+            state_a = state_a - 1
+        if state_b is None:
+            state_b = 1
+        else:
+            state_b = state_b - 1
 
         lra = DataContainer(["E_type", "(E2-E1)_10", "(E2-E1)_01",
                              "LRA", "REORG"])
@@ -198,13 +208,13 @@ class _QFepPart0(object):
         # get the appropriate rows of energies
         # note that these energies are not scaled by lambda
         # [4:] ignores 'file', 'state', 'points' and 'lambda'
-        for row in self.data_state[0].get_rows():
+        for row in self.data_state[state_a].get_rows():
             if abs(row[3] - lambda_a) < 1e-7:
                 e1_a = row[4:]
             if abs(row[3] - lambda_b) < 1e-7:
                 e1_b = row[4:]
         # lambda2 in data_state[1] is actually (1-lambda), correct for that
-        for row in self.data_state[1].get_rows():
+        for row in self.data_state[state_b].get_rows():
             if abs((1 - row[3]) - lambda_a) < 1e-7:
                 e2_a = row[4:]
             if abs((1 - row[3]) - lambda_b) < 1e-7:

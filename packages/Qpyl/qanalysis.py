@@ -80,11 +80,14 @@ class QAnalyseFeps(object):
 
     """
 
-    def __init__(self, qfep_outputs, lra_lambdas=None,
-                 _parent=None, _subcalc_key=None):
+    def __init__(self, qfep_outputs, lra_lambdas=None, multistate=False,
+                 _parent=None, _subcalc_key=None, lra_state_a=None, lra_state_b=None):
 
         self._qfep_outputs = sorted(set(qfep_outputs))
         self._lra_lambdas = lra_lambdas
+        self._lra_state_a = lra_state_a
+        self._lra_state_b = lra_state_b
+        self._multistate= multistate
         self._parent = _parent
         self._subcalc_key = _subcalc_key
 
@@ -348,13 +351,17 @@ dG_lambda   {dg_fep[0]:10.2f} {dg_fep[1]:10.2f} {dg_fep[2]:10.2f} \
             relp = os.path.relpath(qfo_path)
 
             # Part 0 energies
+            # For now, multistate mode plots all energies as a function of state 1 lambda
+            lambda_column = qfo.part0.data_state[0].get_columns()
             for evb_state in range(evb_states):
                 est = evb_state + 1
                 data = qfo.part0.data_state[evb_state].get_columns()
+                if not self._multistate:
+                    lambda_column = data[3]
                 for i, colname in enumerate(part0_coltitles[4:]):
                     key = "e{}l_{}".format(est, colname)
                     # 3rd column is lambda, 4,5,6,7.. are energies
-                    plots[key].add_subplot(relp, data[3], data[i+4])
+                    plots[key].add_subplot(relp, lambda_column, data[i+4])
 
 
             # Part 1 FEP
