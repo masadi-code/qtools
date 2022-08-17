@@ -46,6 +46,7 @@ import shutil
 import tempfile
 import random
 import logging
+import numpy as np
 from collections import OrderedDict as ODict
 
 from Qpyl.core.qdyn import QDynInput, QDynInputError
@@ -516,7 +517,9 @@ Total wasted storage (wild approximation): \
 def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
             frames, repeats, fromlambda, prefix, first_frame_eq,
             pdb_file=None, fep_file=None, runscript_file=None,
-            ignore_errors=False):
+            ignore_errors=False,
+            start_lambdas=None, end_lambdas=(0.0, 1.0),
+            ):
 
     """Generates inputs for a FEP/MD simulation with Q (Qdyn).
 
@@ -553,7 +556,27 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
     repeats = int(repeats)
     if fromlambda != None:
         fromlambda = float(fromlambda)
+    # if fromlambda != None:
+    #     if isinstance(fromlambda, numbers.Number):
+    #         fromlambda = float(fromlambda)
+    #         fromlambda = (fromlambda, 1.0 - fromlambda)
+    #
+    #     fromlambda = np.asarray(fromlambda)
 
+    # By default, traverse only two EVB states
+    if start_lambdas is None:
+        start_lambdas = [1.0, 0.0]
+    if end_lambdas is None:
+        end_lambdas = [0.0, 1.0]
+
+    start_lambda_vec = np.asarray(start_lambdas)
+    end_lambda_vec = np.asarray(end_lambdas)
+
+    if len(start_lambdas) != len(end_lambdas):
+        raise QGenfepsError("Lengths of initial lambdas must match.")
+    num_states = len(start_lambdas)
+    if num_states > 2:
+        logger.info("NOTE: Generating FEPS for more than two states (WIP)")
     # constants
     PREFIX_EQ = "equil_"
     PREFIX_FEP = "fep_"
@@ -611,12 +634,15 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
     di = os.path.dirname(relax_input_file)
     try:
         files = c.parameters["files"]
-        lambda_initial = float(c.parameters["lambdas"].split()[0])
+        lambda_initial_vec = np.asarray([float(l) for l in c.parameters["lambdas"].split()])
         top_file_abs = os.path.join(di, files["topology"])
         re_file_abs = os.path.join(di, files["final"])
         fep_file_abs = os.path.join(di, files["fep"])
         if "restraint" in files:
             rest_file = os.path.join(di, files["restraint"])
+        if len(lambda_initial_vec) != num_states:
+            raise QGenfepsError("Number of states in relaxation input file does not match "
+                                "expected number of states ({})".format(num_states))
     except KeyError as err_msg:
         raise QGenfepsError("Parsing the relaxation input file failed, "
                             "keyword missing... {}".format(err_msg))
@@ -662,23 +688,32 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
         if lambda_initial > 1.0 or lambda_initial < 0.0:
             raise QGenfepsError("Lambda value is bogus, are you on drugs?")
 
+        lambda_initial_vec = lambda_initial * start_lambda_vec + (1.0 - lambda_initial) * end_lambda_vec
+
+
     # create lambda values, find the closest to the starting one and
     # rearrange accordingly: [0.0, 0.02, 0.04, ... 0.98, 1.0]  for frames==51
     lambdas = [float(num) / (frames - 1) for num in range(0, frames)]
+    lambdas = np.asarray(lambdas)
+    # array of lambda vectors
 
-    # [2,]   for lambda_initial == 0.04 (or close to 0.04) and frames==51
-    l_i = [i for i in range(0, frames) if \
-            abs(lambdas[i] - lambda_initial) <= (1.0 / frames)]
-    # there should be only one
-    l_i = l_i[0]
+    # [frames, num_states]
+    lambda_vec_array = lambdas[:, np.newaxis] * start_lambda_vec[np.newaxis, :] \
+        + (1.0 - lambdas[:, np.newaxis]) * end_lambda_vec[np.newaxis, :]
+
+    # get the frame closest to the initial state
+    dists_to_init = np.sum(np.abs(lambda_vec_array - lambda_initial_vec)**2, -1)
+    l_i = np.argmin(dists_to_init)
     lambda_initial = lambdas[l_i]
 
     # [0.02, 0.0,] for the case of lambda_initial == 0.04 and frames == 51
-    forward_lambdas = list(reversed(lambdas[0:l_i]))
+    forward_lambdas = np.asarray(list(reversed(lambdas[0:l_i])))
     # [0.06, 0.08, ..., 1.0] for the case of lambda_initial == 0.04, fr. == 51
     backward_lambdas = lambdas[l_i+1:]
 
-    lambdas = [lambda_initial,] + forward_lambdas + backward_lambdas
+    lambdas = np.concatenate([lambda_initial[np.newaxis], forward_lambdas, backward_lambdas])
+    lambda_vec_steps = np.concatenate([
+        lambda_vec_array[l_i:l_i+1], np.asarray(list(reversed(lambda_vec_array[0:l_i]))), lambda_vec_array[l_i+1:]], axis=0)
 
     # print out some useful information
     logger.info("Using restart file: {}"
@@ -687,8 +722,14 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
                 "".format(os.path.relpath(top_file_abs)))
     logger.info("Using FEP file: {}"
                 "".format(os.path.relpath(fep_file_abs)))
-    logger.info("Starting from lambda value (state 1): {}"
-                "".format(lambda_initial))
+    if num_states > 2:
+        logger.info("Starting from parametric lambda: {}".format(lambda_initial))
+        logger.info("  Initial Lambda vector: \n{}".format(lambda_initial_vec))
+        logger.info("  Lambda_0 =\n{}".format(start_lambda_vec))
+        logger.info("  Lambda_1 =\n{}".format(end_lambda_vec))
+    else:
+        logger.info("Starting from lambda value (state 1): {}"
+                    "".format(lambda_initial))
     logger.info("Number of FEP frames: {} ".format(frames))
 
 
@@ -841,9 +882,7 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
                                     "(e.g. 'energy   10')")
 
             inp.update(parameters={"files": files})
-            inp.update(parameters={"lambdas": "{:9.7f} {:9.7f}"
-                                              "".format(lambda_initial,
-                                                        1-lambda_initial)})
+            inp.update(parameters={"lambdas": (' '.join(["{:9.7f}"]*num_states)).format(*lambda_initial_vec)})
         except QDynInputError as err_msg:
             raise QGenfepsError("Problem with equil. step no. {}: {}"
                                 "".format(step_n, err_msg))
@@ -889,6 +928,7 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
     feps = []
 
     for step_n, lam in enumerate(lambdas):
+        lam_vec = lambda_vec_steps[step_n]
         # create the files section
         final = "{}{:03d}_{:4.3f}.re".format(PREFIX_FEP, step_n, lam)
         dcd = "{}{:03d}_{:4.3f}.dcd".format(PREFIX_FEP, step_n, lam)
@@ -901,7 +941,7 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
 
         # if this step is in new direction (backwards) then
         # set the previous lambda and step to initial
-        if backward_lambdas and lam == backward_lambdas[0]:
+        if len(backward_lambdas)>0 and lam == backward_lambdas[0]:
             prev_fep = feps[0]
         elif step_n == 0:
             prev_fep = eq_steps[-1]
@@ -911,7 +951,7 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
         # if this flag is set, all steps that point to the first step
         # should point to the last eq step
         if first_frame_eq:
-            if step_n == 1 or (backward_lambdas and lam == backward_lambdas[0]):
+            if step_n == 1 or (len(backward_lambdas) > 0 and lam == backward_lambdas[0]):
                 prev_fep = eq_steps[-1]
 
         if rest_fn:
@@ -930,8 +970,7 @@ def genfeps(fep_proc_file, relax_input_file, restraint, energy_list_fn,
                                     "(e.g. 'energy   10')")
 
             inp.update(parameters={"files": files})
-            inp.update(parameters={"lambdas": "{:9.7f} {:9.7f}"
-                                              "".format(lam, 1-lam)})
+            inp.update(parameters={"lambdas": (' '.join(["{:9.7f}"]*num_states)).format(*lam_vec)})
             inp.check()
         except QDynInputError as err_msg:
             raise QGenfepsError("Error in FEP step {}: {}"

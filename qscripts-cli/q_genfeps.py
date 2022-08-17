@@ -89,6 +89,9 @@ optarg.add_argument("--fromlambda", dest="fromlambda",
                          "one in the relaxation input (usually 1.0 - "
                          "starting from the reactants state).")
 
+optarg.add_argument("--start-lambdas", type=float, nargs='+', default=None)
+optarg.add_argument("--end-lambdas", type=float, nargs='+', default=None)
+
 optarg.add_argument("--pdb", dest="pdb", default=None,
                     help="PDB file created with qprep. Used to replace "
                          "$RESID.ATOMNAME$ placeholders with atom indices "
@@ -131,6 +134,8 @@ kwargs = {"fep_proc_file": args.fep_proc,
           "frames": args.frames,
           "repeats": args.repeats,
           "fromlambda": args.fromlambda,
+          "start_lambdas": args.start_lambdas,
+          "end_lambdas": args.end_lambdas,
           "prefix": args.prefix,
           "first_frame_eq": args.first_frame_eq,
           "ignore_errors": args.ignore_errors}
