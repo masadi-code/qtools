@@ -80,7 +80,7 @@ class QAnalyseFeps(object):
 
     """
 
-    def __init__(self, qfep_outputs, lra_lambdas=None, multistate=False,
+    def __init__(self, qfep_outputs, lra_lambdas=None, multistate=0,
                  _parent=None, _subcalc_key=None, lra_state_a=None, lra_state_b=None):
 
         self._qfep_outputs = sorted(set(qfep_outputs))
@@ -334,14 +334,18 @@ dG_lambda   {dg_fep[0]:10.2f} {dg_fep[1]:10.2f} {dg_fep[2]:10.2f} \
         for col in part0_coltitles[4:]:
             for evb_state in range(evb_states):
                 est = evb_state + 1
+                if self._multistate > 0:
+                    estl = self._multistate
+                else:
+                    estl = est
                 key = "e{}l_{}".format(est, col)
                 plots[key] = PlotData("E{} vs Lambda ({})".format(est, col),
-                                      xlabel="Lambda (state {})".format(est),
+                                      xlabel="Lambda (state {})".format(estl),
                                       ylabel="E{} ({})  [kcal/mol]"
                                              "".format(est, col))
                 key = "e{}l_{}".format(est, col)
                 plots[key] = PlotData("E{} vs Lambda ({})".format(est, col),
-                                      xlabel="Lambda (state {})".format(est),
+                                      xlabel="Lambda (state {})".format(estl),
                                       ylabel="E{} ({})  [kcal/mol]"
                                              "".format(est, col))
 
@@ -351,12 +355,15 @@ dG_lambda   {dg_fep[0]:10.2f} {dg_fep[1]:10.2f} {dg_fep[2]:10.2f} \
             relp = os.path.relpath(qfo_path)
 
             # Part 0 energies
-            # For now, multistate mode plots all energies as a function of state 1 lambda
-            lambda_column = qfo.part0.data_state[0].get_columns()[3]
+            # Multistate mode plots all energies as a function of the chosen state
+            if self._multistate > 0:
+                lambda_column = qfo.part0.data_state[self._multistate].get_columns()[3]
+            else:
+                lambda_column = None
             for evb_state in range(evb_states):
                 est = evb_state + 1
                 data = qfo.part0.data_state[evb_state].get_columns()
-                if not self._multistate:
+                if self._multistate == 0:
                     lambda_column = data[3]
                 for i, colname in enumerate(part0_coltitles[4:]):
                     key = "e{}l_{}".format(est, colname)
