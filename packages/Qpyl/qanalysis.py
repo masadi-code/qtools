@@ -352,7 +352,7 @@ dG_lambda   {dg_fep[0]:10.2f} {dg_fep[1]:10.2f} {dg_fep[2]:10.2f} \
 
             # Part 0 energies
             # For now, multistate mode plots all energies as a function of state 1 lambda
-            lambda_column = qfo.part0.data_state[0].get_columns()
+            lambda_column = qfo.part0.data_state[0].get_columns()[3]
             for evb_state in range(evb_states):
                 est = evb_state + 1
                 data = qfo.part0.data_state[evb_state].get_columns()
