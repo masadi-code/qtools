@@ -66,7 +66,7 @@ every mapping.
                              "REORG are calculated. Default is '{}'."
                              "".format(str(def_lra_l)))
 
-    optarg.add_argument("--multistate", action='store_true')
+    optarg.add_argument("--multistate", type=int, default=0)
     optarg.add_argument("--lra-state-a", type=int, default=None)
     optarg.add_argument("--lra-state-b", type=int, default=None)
 
